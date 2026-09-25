@@ -47,14 +47,20 @@ function levelAt(curve, capacity) {
   return store.round(Number(first.level) + ratio * (Number(last.level) - Number(first.level)), digits);
 }
 
-// 汛期判断与限水位
+// 取月-日（MM-DD），用于不依赖年份的汛期口径比较
+function monthDayOf(dateStr) {
+  const match = String(dateStr || '').match(/^\d{4}-(\d{2}-\d{2})$/);
+  return match ? match[1] : '';
+}
+
+// 汛期判断：按 月-日 比较，起止当天算汛期；起止跨年（如 11-01 至 03-01）时取并集
 function inFloodSeason(dateStr, settings) {
-  const parts = String(dateStr || '').split('-');
-  if (parts.length !== 3) return false;
-  const month = Number(parts[1]);
-  const startMonth = Number(String(settings.floodSeasonStart).split('-')[0]);
-  const endMonth = Number(String(settings.floodSeasonEnd).split('-')[0]);
-  return month >= startMonth && month <= endMonth;
+  const md = monthDayOf(dateStr);
+  const start = String(settings.floodSeasonStart || '');
+  const end = String(settings.floodSeasonEnd || '');
+  if (!md || !/^\d{2}-\d{2}$/.test(start) || !/^\d{2}-\d{2}$/.test(end)) return false;
+  if (start <= end) return md >= start && md <= end;
+  return md >= start || md <= end;
 }
 
 function limitLevelOf(reservoir, dateStr, settings) {
@@ -67,12 +73,14 @@ function levelCheck(reservoir, level, dateStr, settings) {
   return { limit, level: Number(level), over, exceeded: over > 0, floodSeason: inFloodSeason(dateStr, settings) };
 }
 
-// 预警等级：水位到警戒/汛限，或者入库流量超过门槛，都要提级
-function warningOf(reservoir, level, inflowFlow, settings) {
+// 预警等级：水位到警戒/限水位，或者入库流量超过门槛，都要提级。
+// 严重级门槛与限水位同一口径：汛期看汛限水位，非汛期看正常蓄水位
+function warningOf(reservoir, level, inflowFlow, dateStr, settings) {
   const levelValue = Number(level);
   const flow = Number(inflowFlow);
+  const seriousLevel = limitLevelOf(reservoir, dateStr, settings);
   let grade = '正常';
-  if (levelValue >= Number(reservoir.floodLimitLevel)) grade = '严重';
+  if (levelValue >= seriousLevel) grade = '严重';
   else if (levelValue >= Number(reservoir.warningLevel)) grade = '警戒';
   else if (levelValue >= Number(reservoir.warningLevel) - 0.5) grade = '注意';
   return { level: grade, byLevel: grade, inflowFlow: flow };

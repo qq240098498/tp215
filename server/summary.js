@@ -18,7 +18,7 @@ function overview(data) {
       .filter((x) => x.reservoirId === r.id && x.date === (latestInflowDate || ''))
       .reduce((s, x) => s + Number(x.flow), 0);
     const check = latest ? water.levelCheck(r, latest.level, latest.date, settings) : null;
-    const warning = latest ? water.warningOf(r, latest.level, inflow, settings) : null;
+    const warning = latest ? water.warningOf(r, latest.level, inflow, latest.date, settings) : null;
     return {
       id: r.id,
       code: r.code,
