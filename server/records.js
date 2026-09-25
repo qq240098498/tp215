@@ -17,7 +17,7 @@ function listLevels(data, query) {
       const inflow = data.inflows
         .filter((x) => x.reservoirId === l.reservoirId && x.date === l.date)
         .reduce((s, x) => s + Number(x.flow), 0);
-      const warning = reservoir ? water.warningOf(reservoir, l.level, inflow, data.settings) : null;
+      const warning = reservoir ? water.warningOf(reservoir, l.level, inflow, data.settings, l.date) : null;
       return Object.assign({}, l, {
         reservoirName: reservoir ? reservoir.name : '',
         limit: check ? check.limit : null,

@@ -48,13 +48,24 @@ function levelAt(curve, capacity) {
 }
 
 // 汛期判断与限水位
+// 把 年-月-日 或 月-日 规整成零填充的 月-日，非法输入返回 null
+function monthDayOf(dateStr) {
+  const matched = String(dateStr || '').match(/(\d{1,2})-(\d{1,2})$/);
+  if (!matched) return null;
+  const month = Number(matched[1]);
+  const day = Number(matched[2]);
+  if (!Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+}
+
+// 按 月-日 判断，起止当天都算汛期；起晚于止时按跨年汛期（两段）处理
 function inFloodSeason(dateStr, settings) {
-  const parts = String(dateStr || '').split('-');
-  if (parts.length !== 3) return false;
-  const month = Number(parts[1]);
-  const startMonth = Number(String(settings.floodSeasonStart).split('-')[0]);
-  const endMonth = Number(String(settings.floodSeasonEnd).split('-')[0]);
-  return month >= startMonth && month <= endMonth;
+  const day = monthDayOf(dateStr);
+  const start = monthDayOf(settings.floodSeasonStart);
+  const end = monthDayOf(settings.floodSeasonEnd);
+  if (!day || !start || !end) return false;
+  if (start <= end) return day >= start && day <= end;
+  return day >= start || day <= end;
 }
 
 function limitLevelOf(reservoir, dateStr, settings) {
@@ -67,12 +78,13 @@ function levelCheck(reservoir, level, dateStr, settings) {
   return { limit, level: Number(level), over, exceeded: over > 0, floodSeason: inFloodSeason(dateStr, settings) };
 }
 
-// 预警等级：水位到警戒/汛限，或者入库流量超过门槛，都要提级
-function warningOf(reservoir, level, inflowFlow, settings) {
+// 预警等级：水位到当天的限水位（汛期汛限、非汛期正常蓄水位）或警戒要提级
+function warningOf(reservoir, level, inflowFlow, settings, dateStr) {
   const levelValue = Number(level);
   const flow = Number(inflowFlow);
+  const limit = limitLevelOf(reservoir, dateStr, settings);
   let grade = '正常';
-  if (levelValue >= Number(reservoir.floodLimitLevel)) grade = '严重';
+  if (levelValue >= limit) grade = '严重';
   else if (levelValue >= Number(reservoir.warningLevel)) grade = '警戒';
   else if (levelValue >= Number(reservoir.warningLevel) - 0.5) grade = '注意';
   return { level: grade, byLevel: grade, inflowFlow: flow };
@@ -133,6 +145,7 @@ module.exports = {
   sortedPoints,
   capacityAt,
   levelAt,
+  monthDayOf,
   inFloodSeason,
   limitLevelOf,
   levelCheck,
